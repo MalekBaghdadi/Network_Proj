@@ -20,12 +20,6 @@ Thumbs.db
 *.log
 proxy.log
 
-# Screenshots / generated images (optional)
-screenshots/
-*.png
-*.jpg
-*.jpeg
-
 # Test / temp files
 *.tmp
 *.temp
