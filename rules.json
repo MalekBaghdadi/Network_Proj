@@ -1,4 +1,9 @@
 {
-  "blacklisted_domains": [],
-  "whitelisted_domains": []
+    "mode": "blacklist",
+    "blocked": [
+        "wikipedia.org"
+    ],
+    "allowed": [
+        "info.cern.ch"
+    ]
 }

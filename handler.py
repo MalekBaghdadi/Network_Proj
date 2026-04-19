@@ -3,24 +3,20 @@
 #              proxy-specific headers, and forwards traffic between the client
 #              and the target server. Handles both HTTP (GET/POST forwarding)
 #              and HTTPS (raw TCP tunnel via CONNECT method).
-#
-# Author Nakhoul Nehra: Integrated logging calls via logger.py 
-#   - log_request()  called once the request is parsed successfully.
-#   - log_response() called after the full response is relayed to the client.
-#   - log_error()    called inside every except block in place of bare print().
+# Author: Nakhoul Nehra | Logging integrated via logger.py
 
 import socket
 import threading
 from constants import BUFFER_SIZE
-from logger import log_request, log_response, log_error  
-
-# BUFFER_SIZE imported from constants.py
+from filter import is_blocked, blocked_response
+from logger import log_request, log_response, log_error, logger
 
 
 def parse_request(raw_request):
+    # Author: Malek Baghdadi
     """
     Parse a raw HTTP request into its components.
-    Returns: (method, url, host, port, headers_dict, raw_request)
+    Returns: (method, url, host, port, headers_dict)
     """
     try:
         # Split header section from body
@@ -32,7 +28,7 @@ def parse_request(raw_request):
         parts = first_line.split(' ')
         method = parts[0]   # GET, POST, CONNECT, etc.
         url    = parts[1]   # full URL or path
-        # parts[2] is the HTTP version — we don't need it for now
+        # parts[2] is the HTTP version — we don't need it here
 
         # Parse remaining lines into a headers dict
         headers = {}
@@ -49,7 +45,7 @@ def parse_request(raw_request):
         if method == 'CONNECT':
             host, port = url.split(':')
             port = int(port)
-        # For regular HTTP: url looks like "http://example.com/path"
+        # For regular HTTP with absolute URL: "http://example.com/path"
         elif '://' in url:
             without_scheme = url.split('://')[1]
             host_part = without_scheme.split('/')[0]
@@ -58,17 +54,24 @@ def parse_request(raw_request):
                 port = int(port)
             else:
                 host = host_part
+        else:
+            # Fallback: relative URL — host and port come from the Host header
+            if ':' in host:
+                host, port_str = host.split(':', 1)
+                port = int(port_str)
 
         return method, url, host, port, headers
 
     except Exception as e:
-        print(f"[!] Failed to parse request: {e}")
+        logger.error(f"parse_request failed: {e}")
         return None, None, None, None, None
 
 
 def modify_headers(raw_request):
+    # Author: Malek Baghdadi
     """
     Remove proxy-specific headers from the request before forwarding.
+    Rewrites the request line to use a path-only URL (strips scheme and host).
     Returns the cleaned request as bytes.
     """
     # Headers that must NOT be forwarded to the target server
@@ -88,9 +91,20 @@ def modify_headers(raw_request):
         header_part, _, body = raw_request.partition(b'\r\n\r\n')
         lines = header_part.decode('utf-8', errors='replace').split('\r\n')
 
+        # Rewrite absolute URL to path-only in the request line
+        # e.g. "GET http://example.com/path?q=1 HTTP/1.1" → "GET /path?q=1 HTTP/1.1"
+        first_line_parts = lines[0].split(' ')
+        if len(first_line_parts) == 3:
+            req_method, req_url, req_version = first_line_parts
+            if '://' in req_url:
+                without_scheme = req_url.split('://')[1]
+                slash_idx = without_scheme.find('/')
+                path_only = without_scheme[slash_idx:] if slash_idx != -1 else '/'
+                lines[0] = f"{req_method} {path_only} {req_version}"
+
         clean_lines = []
         for line in lines:
-            # Keep the first line (GET /path HTTP/1.1) always
+            # Keep the first line (e.g. GET /path HTTP/1.1) always
             if not line or ':' not in line:
                 clean_lines.append(line)
                 continue
@@ -105,17 +119,17 @@ def modify_headers(raw_request):
         return cleaned + b'\r\n\r\n' + body
 
     except Exception as e:
-        print(f"[!] Header modification failed: {e}")
+        logger.error(f"modify_headers failed: {e}")
         return raw_request
 
 
+# Author: Nakhoul Nehra
 def _parse_status_code(response_bytes: bytes) -> int | None:
     """
-    Extract the HTTP status code from the first line of a response.
+    Called inside forward_http() to extract the HTTP status code
+    from the first response chunk.
     e.g. b'HTTP/1.1 200 OK\\r\\n...' → 200
     Returns None if parsing fails (e.g. for binary/partial data).
-    
-    Author [Member 2]: Helper added for logging response status codesS.
     """
     try:
         first_line = response_bytes.split(b'\r\n', 1)[0].decode('utf-8', errors='replace')
@@ -126,12 +140,10 @@ def _parse_status_code(response_bytes: bytes) -> int | None:
 
 
 def forward_http(client_socket, host, port, request, client_ip, client_port, method, url):
+    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra
     """
     Forward an HTTP request to the target server and relay the response
     back to the client.
-
-    Author [Member 2]: Added client_ip, client_port, method, url parameters
-                       so we can call log_response() / log_error().
     """
     server_socket = None          # ensure it is defined for the finally block
     status_code   = None
@@ -160,16 +172,16 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
             client_socket.sendall(data)
 
         # Log the completed response
-        log_response(client_ip, client_port, method, url, status_code)
+        log_response(client_ip, client_port, method, url, host, port, status_code)
 
     except socket.timeout:
         msg = f"Connection to {host}:{port} timed out"
         print(f"[!] {msg}")
-        log_error(client_ip, client_port, "forward_http", msg)  
+        log_error(client_ip, client_port, "forward_http", msg)
 
     except Exception as e:
         print(f"[!] HTTP forwarding error: {e}")
-        log_error(client_ip, client_port, "forward_http", e)   
+        log_error(client_ip, client_port, "forward_http", e)
 
     finally:
         if server_socket:
@@ -177,12 +189,10 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
 
 
 def tunnel_https(client_socket, host, port, client_ip, client_port, url):
+    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra
     """
     Create a raw TCP tunnel for HTTPS traffic (no decryption).
     Tells the client the tunnel is ready, then pipes data both ways.
-
-    Author [Member 2]: Added client_ip, client_port, url parameters
-                       for logging.
     """
     server_socket = None   # ensure defined for finally block
 
@@ -196,7 +206,7 @@ def tunnel_https(client_socket, host, port, client_ip, client_port, url):
         client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
 
         # Log the successful tunnel establishment (no HTTP status code)
-        log_response(client_ip, client_port, "CONNECT", url, status_code=None)
+        log_response(client_ip, client_port, "CONNECT", url, host, port, status_code=None)
 
         # Now pipe data in both directions simultaneously using two threads
         def pipe(src, dst):
@@ -220,7 +230,7 @@ def tunnel_https(client_socket, host, port, client_ip, client_port, url):
 
     except Exception as e:
         print(f"[!] HTTPS tunnel error: {e}")
-        log_error(client_ip, client_port, "tunnel_https", e)  
+        log_error(client_ip, client_port, "tunnel_https", e)
 
     finally:
         if server_socket:
@@ -228,6 +238,7 @@ def tunnel_https(client_socket, host, port, client_ip, client_port, url):
 
 
 def handle_client(client_socket, client_address):
+    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra
     """
     Entry point for each client thread.
     Reads the request, decides if it's HTTP or HTTPS, and routes accordingly.
@@ -250,6 +261,11 @@ def handle_client(client_socket, client_address):
         # Log every incoming request immediately after parsing
         log_request(client_ip, client_port, method, url, host, port)
 
+        # Check the request against the blacklist / whitelist before forwarding
+        if is_blocked(host, client_ip, client_port, url):
+            client_socket.sendall(blocked_response())
+            return
+
         # Route based on method
         if method == 'CONNECT':
             # HTTPS tunnel — don't modify the request, just tunnel
@@ -262,7 +278,7 @@ def handle_client(client_socket, client_address):
 
     except Exception as e:
         print(f"[!] handle_client error: {e}")
-        log_error(client_ip, client_port, "handle_client", e)   
+        log_error(client_ip, client_port, "handle_client", e)
 
     finally:
         client_socket.close()

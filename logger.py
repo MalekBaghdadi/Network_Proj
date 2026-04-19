@@ -5,27 +5,24 @@
 
 import logging
 import os
-from datetime import datetime
 
-# ── Log file lives next to the running script ────────────────────────────────
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "proxy.log")
 
-# ── Module-level logger ───────────────────────────────────────────────────────
 logger = logging.getLogger("ProxyLogger")
 logger.setLevel(logging.DEBUG)          # capture everything (DEBUG and above)
 
 # Prevent duplicate handlers if this module is imported more than once
 if not logger.handlers:
 
-    # ── File handler — writes every record to proxy.log 
+    # File handler — writes every record to proxy.log
     file_handler = logging.FileHandler(LOG_FILE, encoding="utf-8")
     file_handler.setLevel(logging.DEBUG)
 
-    # ── Console handler — shows INFO+ in the terminal
+    # Console handler — shows INFO+ in the terminal
     console_handler = logging.StreamHandler()
     console_handler.setLevel(logging.INFO)
 
-    # ── Shared formatter: timestamp | level | message
+    # Shared formatter: timestamp | level | message
     formatter = logging.Formatter(
         fmt="%(asctime)s | %(levelname)-8s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
@@ -61,6 +58,7 @@ def log_request(client_ip: str, client_port: int,
 
 def log_response(client_ip: str, client_port: int,
                  method: str, url: str,
+                 target_host: str, target_port: int,
                  status_code: int | None) -> None:
     """
     Log the outcome of a forwarded request once the response is received.
@@ -70,13 +68,15 @@ def log_response(client_ip: str, client_port: int,
         client_port : Source port of the connecting client.
         method      : HTTP method used.
         url         : Full URL that was requested.
+        target_host : Hostname of the target server.
+        target_port : Port of the target server.
         status_code : HTTP status code returned by the target server,
                       or None for raw HTTPS tunnels (CONNECT).
     """
     code_str = str(status_code) if status_code is not None else "TUNNEL"
     logger.info(
         f"RESPONSE | client={client_ip}:{client_port} | "
-        f"{method} {url} | status={code_str}"
+        f"{method} {url} | target={target_host}:{target_port} | status={code_str}"
     )
 
 
@@ -115,7 +115,7 @@ def log_blocked(client_ip: str, client_port: int, url: str) -> None:
     )
 
 
-#testing 
+#testing
 
 
 """
