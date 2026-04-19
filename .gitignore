@@ -1,0 +1,34 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.env/
+.env.*
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+proxy.log
+
+# Test / temp files
+*.tmp
+*.temp
+
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Local config files
+config.local.py
+secrets.py
