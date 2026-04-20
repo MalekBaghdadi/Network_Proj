@@ -224,27 +224,33 @@ def store(host: str, url: str, method: str, status_code, response_bytes: bytes) 
     proxy's core forwarding path.
 
     Filters applied, in order:
-      - Method must be in CACHEABLE_METHODS         (project choice: GET only)
-      - Status code must be 2xx                     (don't cache 4xx / 5xx errors)
-      - Response size must be ≤ MAX_ENTRY_BYTES     (skip huge downloads)
-      - Response headers must not forbid caching    (no-store / no-cache / private)
-      - Resulting TTL must be positive              (max-age=0 / expired → skip)
+      - Method must be in CACHEABLE_METHODS     (project choice: GET only)
+      - Status code must be 2xx                 (don't cache 4xx / 5xx errors)
+      - Response size must be ≤ MAX_ENTRY_BYTES (skip huge downloads)
+
+    Origin Cache-Control directives (no-store / no-cache / private / max-age=0)
+    are intentionally overridden with DEFAULT_TTL so that repeated requests
+    always benefit from the cache regardless of what the origin says.
     """
     if method not in CACHEABLE_METHODS:
         return False
     if status_code is None or not (200 <= status_code < 300):
+        key = _cache_key(host, url)
+        logger.debug(f"CACHE SKIP (status={status_code}) | {key}")
         return False
     if len(response_bytes) > MAX_ENTRY_BYTES:
+        key = _cache_key(host, url)
+        logger.debug(f"CACHE SKIP (oversized {len(response_bytes)}B) | {key}")
         return False
 
     _, headers = _parse_response_head(response_bytes)
     ttl = _extract_ttl(headers)
-    if ttl is None:
-        return False          # explicit no-store / no-cache / private
-    if ttl == -1:
-        ttl = DEFAULT_TTL     # no directive → project default
-    if ttl <= 0:
-        return False          # max-age=0 or Expires in the past
+    # ttl is None  → origin said no-store / no-cache / private
+    # ttl == -1    → no caching directive at all
+    # ttl <= 0     → origin said max-age=0 or Expires already past
+    # In all these cases fall back to DEFAULT_TTL so repeated requests get a hit.
+    if ttl is None or ttl <= 0:
+        ttl = DEFAULT_TTL
 
     key   = _cache_key(host, url)
     entry = _CacheEntry(response_bytes, ttl)
