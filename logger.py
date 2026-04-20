@@ -100,12 +100,12 @@ def log_error(client_ip: str, client_port: int,
 
 def log_cache_hit(url: str) -> None:
     """Log when a response is served from cache (used by caching layer)."""
-    logger.debug(f"CACHE HIT  | {url}")
+    logger.info(f"CACHE HIT  | {url}")
 
 
 def log_cache_miss(url: str) -> None:
     """Log when a cache miss forces a fresh fetch (used by caching layer)."""
-    logger.debug(f"CACHE MISS | {url}")
+    logger.info(f"CACHE MISS | {url}")
 
 
 def log_blocked(client_ip: str, client_port: int, url: str) -> None:

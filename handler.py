@@ -4,12 +4,14 @@
 #              and the target server. Handles both HTTP (GET/POST forwarding)
 #              and HTTPS (raw TCP tunnel via CONNECT method).
 # Author: Nakhoul Nehra | Logging integrated via logger.py
+# Author: Charbel Farhat | Content caching integrated via cache.py
 
 import socket
 import threading
 from constants import BUFFER_SIZE
 from filter import is_blocked, blocked_response
 from logger import log_request, log_response, log_error, logger
+from cache import get as cache_get, store as cache_store, MAX_ENTRY_BYTES
 
 
 def parse_request(raw_request):
@@ -140,14 +142,27 @@ def _parse_status_code(response_bytes: bytes) -> int | None:
 
 
 def forward_http(client_socket, host, port, request, client_ip, client_port, method, url):
-    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra
+    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra | Caching integrated by: Charbel Farhat
     """
     Forward an HTTP request to the target server and relay the response
-    back to the client.
+    back to the client. While streaming, a copy of the response is
+    accumulated in memory so that cacheable responses (GET + 2xx) can be
+    stored for future hits. If the response exceeds MAX_ENTRY_BYTES the
+    accumulation is discarded — the client still gets the full stream,
+    we just don't try to cache oversized content.
     """
     server_socket = None          # ensure it is defined for the finally block
     status_code   = None
     first_chunk   = True
+
+    # Cache accumulation 
+    # Only accumulate for methods that could ever enter the cache.
+    # skip_cache flips to True if the response outgrows MAX_ENTRY_BYTES,
+    # at which point we drop the buffer to free memory and stop appending.
+    # Author: Charbel Farhat
+    accumulate      = (method == 'GET')
+    response_buffer = bytearray() if accumulate else None
+    skip_cache      = False
 
     try:
         # Open a socket to the target server
@@ -171,8 +186,22 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
 
             client_socket.sendall(data)
 
+            # Cache accumulation (Author: Charbel Farhat)
+            if accumulate and not skip_cache:
+                response_buffer.extend(data)
+                if len(response_buffer) > MAX_ENTRY_BYTES:
+                    # Response is too big to cache — free the memory and give up.
+                    skip_cache      = True
+                    response_buffer = None
+
         # Log the completed response
         log_response(client_ip, client_port, method, url, host, port, status_code)
+
+        # Store in cache if we have a complete GET + 2xx response (Author: Charbel Farhat)
+        # cache_store() silently enforces its own policy (status code, headers,
+        # size, Cache-Control), so we can call it unconditionally here.
+        if accumulate and not skip_cache and response_buffer is not None:
+            cache_store(host, url, method, status_code, bytes(response_buffer))
 
     except socket.timeout:
         msg = f"Connection to {host}:{port} timed out"
@@ -265,6 +294,20 @@ def handle_client(client_socket, client_address):
         if is_blocked(host, client_ip, client_port, url):
             client_socket.sendall(blocked_response())
             return
+
+        # Cache lookup (Author: Charbel Farhat)
+        # Check the cache BEFORE opening a socket to the target server.
+        # On a fresh hit, serve the stored bytes directly and skip forwarding.
+        # cache_get() is method-aware — non-GET requests return None immediately.
+        if method == 'GET':
+            cached_bytes = cache_get(host, url, method)
+            if cached_bytes is not None:
+                client_socket.sendall(cached_bytes)
+                # Extract the stored status code so the log line still shows e.g. 200.
+                cached_status = _parse_status_code(cached_bytes)
+                log_response(client_ip, client_port, method, url,
+                             host, port, cached_status)
+                return
 
         # Route based on method
         if method == 'CONNECT':
