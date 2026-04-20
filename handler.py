@@ -155,10 +155,11 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
     status_code   = None
     first_chunk   = True
 
-    # Cache accumulation (Author: Charbel Farhat)
+    # Cache accumulation 
     # Only accumulate for methods that could ever enter the cache.
     # skip_cache flips to True if the response outgrows MAX_ENTRY_BYTES,
     # at which point we drop the buffer to free memory and stop appending.
+    # Author: Charbel Farhat
     accumulate      = (method == 'GET')
     response_buffer = bytearray() if accumulate else None
     skip_cache      = False
