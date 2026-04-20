@@ -16,19 +16,16 @@ from email.utils import parsedate_to_datetime
 
 from logger import log_cache_hit, log_cache_miss, logger
 
-
-# ── Configuration ────────────────────────────────────────────────────────────
-# Author: Charbel Farhat
-DEFAULT_TTL       = 60                    # seconds — used when no Cache-Control / Expires
-MAX_CACHE_BYTES   = 50 * 1024 * 1024      # 50 MB total across ALL entries
-MAX_ENTRY_BYTES   = 10 * 1024 * 1024      # 10 MB per single response (larger = skip)
-CACHEABLE_METHODS = {"GET"}               # project choice: only GET goes in the cache
+DEFAULT_TTL       = 60                   
+MAX_CACHE_BYTES   = 50 * 1024 * 1024     
+MAX_ENTRY_BYTES   = 10 * 1024 * 1024      
+CACHEABLE_METHODS = {"GET"}               
 
 
-# ── Entry record ─────────────────────────────────────────────────────────────
+# Entry record
 class _CacheEntry:
+  #Author: Charbel Farhat
     """
-    Author: Charbel Farhat
     Single cached response record. Kept minimal with __slots__ to reduce
     memory overhead when the cache fills up with many small entries.
     """
@@ -49,7 +46,7 @@ class _CacheEntry:
         return max(0, int(self.expires_at - time.time()))
 
 
-# ── Internal state ───────────────────────────────────────────────────────────
+# Internal state
 # OrderedDict is used to get cheap LRU behaviour:
 #   - move_to_end(key)      → mark an entry as most-recently-used on a hit
 #   - popitem(last=False)   → evict the oldest (least-recently-used) entry
@@ -63,13 +60,13 @@ _stats = {
     "misses":    0,
     "stores":    0,
     "evictions": 0,
-    "bytes":     0,   # current total bytes across all live entries
+    "bytes":     0,  
 }
 
 
-# ── Helpers ──────────────────────────────────────────────────────────────────
-# Author: Charbel Farhat
+# Helpers
 def _cache_key(host: str, url: str) -> str:
+  #Author: Charbel Farhat
     """
     Build a canonical cache key from the target host and request URL.
     The proxy may see either an absolute URL (http://example.com/page)
@@ -83,8 +80,8 @@ def _cache_key(host: str, url: str) -> str:
 
 
 def _parse_response_head(response_bytes: bytes):
+  #Author: Charbel Farhat
     """
-    Author: Charbel Farhat
     Pull the status code and response headers out of a raw HTTP response.
     Decoded as ISO-8859-1 (the HTTP/1.1 header charset) so binary bodies
     cannot raise a UnicodeDecodeError while we only care about the head.
@@ -113,8 +110,8 @@ def _parse_response_head(response_bytes: bytes):
 
 
 def _extract_ttl(headers: dict):
+  # Author: Charbel Farhat
     """
-    Author: Charbel Farhat
     Decide a TTL (in seconds) for a response based on its headers.
 
     Return values:
@@ -169,8 +166,8 @@ def _extract_ttl(headers: dict):
 
 
 def _evict_until_fits(incoming_size: int) -> None:
+  # Author: Charbel Farhat
     """
-    Author: Charbel Farhat
     Drop oldest (least-recently-used) entries until the new one fits under
     MAX_CACHE_BYTES. Caller MUST already hold _store_lock.
     """
@@ -181,7 +178,7 @@ def _evict_until_fits(incoming_size: int) -> None:
         logger.debug(f"CACHE EVICT | {url} ({entry.size} bytes)")
 
 
-# ── Public API ───────────────────────────────────────────────────────────────
+# Public API
 # Author: Charbel Farhat
 def get(host: str, url: str, method: str):
     """
@@ -220,8 +217,8 @@ def get(host: str, url: str, method: str):
 
 
 def store(host: str, url: str, method: str, status_code, response_bytes: bytes) -> bool:
+  # Author: Charbel Farhat
     """
-    Author: Charbel Farhat
     Save a response in the cache if policy permits. Returns True if stored,
     False otherwise. Never raises — a caching failure must not break the
     proxy's core forwarding path.
@@ -268,7 +265,7 @@ def store(host: str, url: str, method: str, status_code, response_bytes: bytes) 
     return True
 
 
-# ── Admin-dashboard helpers (Phase 3 will import these) ──────────────────────
+# Admin-dashboard helpers
 # Author: Charbel Farhat
 def list_entries() -> list:
     """
