@@ -218,38 +218,60 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
 
 
 def tunnel_https(client_socket, host, port, client_ip, client_port, url):
-    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra
+    # Author: Member 3 | MITM integration
     """
-    Create a raw TCP tunnel for HTTPS traffic (no decryption).
-    Tells the client the tunnel is ready, then pipes data both ways.
+    Perform a Man-In-The-Middle attack on HTTPS traffic.
+    Creates a fake cert for the domain, wraps sockets in SSL, and logs plaintext.
     """
-    server_socket = None   # ensure defined for finally block
+    server_socket = None
+    secure_client_socket = None
+    secure_server_socket = None
 
     try:
-        # Connect to the real target server
-        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        server_socket.settimeout(10)
-        server_socket.connect((host, port))
-
+        from mitm import get_server_context, get_client_context
         # Tell the client the tunnel is open
         client_socket.sendall(b'HTTP/1.1 200 Connection Established\r\n\r\n')
 
         # Log the successful tunnel establishment (no HTTP status code)
         log_response(client_ip, client_port, "CONNECT", url, host, port, status_code=None)
 
+        # Upgrade client socket to SSL using fake certificate
+        try:
+            server_context = get_server_context(host)
+            secure_client_socket = server_context.wrap_socket(client_socket, server_side=True)
+        except Exception as ssl_err:
+            print(f"[!] SSL wrap failed for client {host}: {ssl_err}")
+            return
+
+        # Connect to the real target server
+        import socket
+        server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        server_socket.settimeout(10)
+        server_socket.connect((host, port))
+
+        # Upgrade server socket to SSL
+        client_context = get_client_context()
+        secure_server_socket = client_context.wrap_socket(server_socket, server_hostname=host)
+
         # Now pipe data in both directions simultaneously using two threads
-        def pipe(src, dst):
+        def pipe(src, dst, label):
             try:
                 while True:
                     data = src.recv(BUFFER_SIZE)
                     if not data:
                         break
+                    
+                    # Read/log plaintext content!
+                    if label == "Client->Server" and len(data) > 0:
+                        print(f"\n[MITM] Plaintext Request to {host}:")
+                        print(data.decode('utf-8', errors='replace').split('\r\n')[0])
+                    
                     dst.sendall(data)
             except Exception:
                 pass
 
-        t1 = threading.Thread(target=pipe, args=(client_socket, server_socket))
-        t2 = threading.Thread(target=pipe, args=(server_socket, client_socket))
+        t1 = threading.Thread(target=pipe, args=(secure_client_socket, secure_server_socket, "Client->Server"))
+        t2 = threading.Thread(target=pipe, args=(secure_server_socket, secure_client_socket, "Server->Client"))
         t1.daemon = True
         t2.daemon = True
         t1.start()
@@ -258,11 +280,13 @@ def tunnel_https(client_socket, host, port, client_ip, client_port, url):
         t2.join()
 
     except Exception as e:
-        print(f"[!] HTTPS tunnel error: {e}")
+        print(f"[!] HTTPS MITM error: {e}")
         log_error(client_ip, client_port, "tunnel_https", e)
 
     finally:
-        if server_socket:
+        if secure_server_socket:
+            secure_server_socket.close()
+        elif server_socket:
             server_socket.close()
 
 
