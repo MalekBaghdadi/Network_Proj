@@ -6,6 +6,7 @@ import threading
 import sys
 from handler import handle_client
 from constants import BUFFER_SIZE
+from mitm import generate_ca
 
 HOST = '0.0.0.0'    # listen on all network interfaces
 PORT = 8888         # clients will point their browser to this port
@@ -29,6 +30,8 @@ def tracked_handle(client_socket, client_address):
 
 
 def start_server():
+    generate_ca()  # Generate CA cert on startup if not already present
+
     # Create a TCP socket (IPv4)
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
