@@ -336,6 +336,88 @@ class UptimeCard(QFrame):
         self.setLayout(layout)
 
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Request worker thread
+# ─────────────────────────────────────────────────────────────────────────────
+class RequestWorker(QThread):
+    """
+    Sends one HTTP request through the local proxy without freezing the PyQt UI.
+    The result is emitted back to the main window as plain text.
+    """
+    finished = pyqtSignal(str)
+
+    def __init__(self, method, url, body=""):
+        super().__init__()
+        self.method = method
+        self.url = url
+        self.body = body
+
+    def run(self):
+        try:
+            proxy_handler = urllib.request.ProxyHandler({
+                "http": PROXY_URL,
+                "https": PROXY_URL,
+            })
+            opener = urllib.request.build_opener(proxy_handler)
+
+            data = None
+            headers = {}
+
+            if self.method == "POST":
+                data = self.body.encode("utf-8")
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+            request = urllib.request.Request(
+                self.url,
+                data=data,
+                headers=headers,
+                method=self.method,
+            )
+
+            with opener.open(request, timeout=10) as response:
+                status = response.status
+                reason = response.reason
+                content_type = response.headers.get("Content-Type", "")
+                raw_body = response.read(3000)
+
+            preview = raw_body.decode("utf-8", errors="replace")
+
+            result = (
+                f"Request completed through proxy.\n\n"
+                f"Method: {self.method}\n"
+                f"URL: {self.url}\n"
+                f"Status: {status} {reason}\n"
+                f"Content-Type: {content_type}\n\n"
+                f"Response preview:\n"
+                f"{preview}"
+            )
+            self.finished.emit(result)
+
+        except urllib.error.HTTPError as e:
+            try:
+                error_body = e.read(2000).decode("utf-8", errors="replace")
+            except Exception:
+                error_body = ""
+
+            self.finished.emit(
+                f"HTTP error returned through proxy.\n\n"
+                f"Method: {self.method}\n"
+                f"URL: {self.url}\n"
+                f"Status: {e.code} {e.reason}\n\n"
+                f"Response body:\n{error_body}"
+            )
+
+        except Exception as e:
+            self.finished.emit(
+                f"Request failed.\n\n"
+                f"Method: {self.method}\n"
+                f"URL: {self.url}\n\n"
+                f"Error:\n{e}"
+            )
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 #  Main window
 # ─────────────────────────────────────────────────────────────────────────────
