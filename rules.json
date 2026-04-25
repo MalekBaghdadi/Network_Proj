@@ -1,9 +1,8 @@
 {
-    "mode": "blacklist",
-    "blocked": [
-        "wikipedia.org"
-    ],
-    "allowed": [
-        "info.cern.ch"
-    ]
+  "mode": "whitelist",
+  "blocked": [],
+  "allowed": [
+    "info.cern.ch",
+    "gaia.cs.umass.edu"
+  ]
 }

@@ -218,7 +218,7 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
 
 
 def tunnel_https(client_socket, host, port, client_ip, client_port, url):
-    # Author: Member 3 | MITM integration
+    # Author: Charbel Farhat - Malek | MITM integration
     """
     Perform a Man-In-The-Middle attack on HTTPS traffic.
     Creates a fake cert for the domain, wraps sockets in SSL, and logs plaintext.
