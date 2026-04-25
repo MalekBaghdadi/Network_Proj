@@ -12,14 +12,14 @@ import threading
 
 from logger import log_blocked
 
-# ── Path to the rules file (same directory as this script) ───────────────────
+# Path to the rules file (same directory as this script).
 RULES_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rules.json")
 
-# ── In-memory copy of the loaded rules and a lock for thread safety ──────────
+# In-memory rules plus a lock for thread safety.
 _rules      = {"mode": "blacklist", "blocked": [], "allowed": []}
 _rules_lock = threading.Lock()
 
-# ── Track the last modification time so we only reload when the file changes ─
+# Track last modified time so we only reload when needed.
 _last_mtime = 0.0
 
 

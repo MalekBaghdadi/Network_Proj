@@ -101,9 +101,7 @@ PRESET_SITES = [
 ]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Fun widget 1: animated pulsing status dot
-# ─────────────────────────────────────────────────────────────────────────────
+# Animated status-dot widget.
 class PulseDot(QWidget):
     """
     Small circle that smoothly pulses between two greens when running,
@@ -144,12 +142,12 @@ class PulseDot(QWidget):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         if self._running:
-            # outer glow ring
+            # Draw the outer glow ring.
             glow = QColor(22, 163, 74, max(0, self._alpha - 140))
             p.setBrush(QBrush(glow))
             p.setPen(Qt.NoPen)
             p.drawEllipse(0, 0, 14, 14)
-            # solid core
+            # Draw the solid center.
             core = QColor(22, 163, 74, self._alpha)
             p.setBrush(QBrush(core))
             p.drawEllipse(2, 2, 10, 10)
@@ -160,9 +158,7 @@ class PulseDot(QWidget):
             p.drawEllipse(2, 2, 10, 10)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Fun widget 2: live uptime counter
-# ─────────────────────────────────────────────────────────────────────────────
+# Live uptime counter widget.
 class UptimeCounter(QLabel):
     """Counts elapsed time since the proxy was started. Ticks every second."""
     def __init__(self, parent=None):
@@ -191,9 +187,7 @@ class UptimeCounter(QLabel):
         self.setText(f"{h:02d}h {m:02d}m {s:02d}s")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Fun widget 3: live clock in the sidebar
-# ─────────────────────────────────────────────────────────────────────────────
+# Live clock widget shown in the sidebar.
 class LiveClock(QLabel):
     """Displays a live HH:MM:SS clock, ticking every second."""
     def __init__(self, parent=None):
@@ -211,9 +205,7 @@ class LiveClock(QLabel):
         self.setText(datetime.datetime.now().strftime("%H:%M:%S"))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Stat card
-# ─────────────────────────────────────────────────────────────────────────────
+# Reusable stat card component.
 class Card(QFrame):
     def __init__(self, title, value="—"):
         super().__init__()
@@ -236,9 +228,7 @@ class Card(QFrame):
         self.value_label.setText(str(value))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Status card — embeds PulseDot
-# ─────────────────────────────────────────────────────────────────────────────
+# Status card that includes a PulseDot.
 class StatusCard(QFrame):
     def __init__(self):
         super().__init__()
@@ -280,9 +270,7 @@ class StatusCard(QFrame):
         )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Cache hit card — embeds thin progress bar
-# ─────────────────────────────────────────────────────────────────────────────
+# Cache-hit card with a thin progress bar.
 class CacheHitCard(QFrame):
     def __init__(self):
         super().__init__()
@@ -315,9 +303,7 @@ class CacheHitCard(QFrame):
         self.bar.setValue(int(pct))
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Uptime card — embeds UptimeCounter
-# ─────────────────────────────────────────────────────────────────────────────
+# Uptime card that wraps UptimeCounter.
 class UptimeCard(QFrame):
     def __init__(self):
         super().__init__()
@@ -338,9 +324,7 @@ class UptimeCard(QFrame):
 
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Request worker thread
-# ─────────────────────────────────────────────────────────────────────────────
+# Worker thread for proxy test requests.
 class RequestWorker(QThread):
     """
     Sends one HTTP request through the local proxy without freezing the PyQt UI.
@@ -418,9 +402,7 @@ class RequestWorker(QThread):
             )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  Main window
-# ─────────────────────────────────────────────────────────────────────────────
+# Main control-panel window.
 class ControlPanel(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -441,10 +423,10 @@ class ControlPanel(QMainWindow):
         self.load_rules()
         self.refresh_all()
 
-    # ── Stylesheet ────────────────────────────────────────────────────────────
+    # Stylesheet.
     def apply_style(self):
         self.setStyleSheet("""
-            /* ── Base ──────────────────────────────────────────────────── */
+            /* Base */
             QMainWindow {
                 background-color: #edf2f9;
             }
@@ -456,7 +438,7 @@ class ControlPanel(QMainWindow):
                 color: #1a2e4a;
             }
 
-            /* ── Page titles ────────────────────────────────────────────── */
+            /* Page titles */
             QLabel#Title {
                 font-family: Georgia, 'Times New Roman', serif;
                 font-size: 26px;
@@ -477,7 +459,7 @@ class ControlPanel(QMainWindow):
                 background-color: transparent;
             }
 
-            /* ── Sidebar ────────────────────────────────────────────────── */
+            /* Sidebar */
             QWidget#SidebarBox {
                 background-color: #162d5c;
             }
@@ -530,7 +512,7 @@ class ControlPanel(QMainWindow):
                 color: #a8c8f0;
             }
 
-            /* ── Clock ──────────────────────────────────────────────────── */
+            /* Clock */
             QLabel#LiveClock {
                 font-family: 'Consolas', 'Courier New', monospace;
                 font-size: 20px;
@@ -547,7 +529,7 @@ class ControlPanel(QMainWindow):
                 background-color: transparent;
             }
 
-            /* ── Stat cards ─────────────────────────────────────────────── */
+            /* Stat cards */
             QFrame#Card {
                 background-color: #ffffff;
                 border: 1px solid #c8d8ee;
@@ -571,7 +553,7 @@ class ControlPanel(QMainWindow):
                 background-color: transparent;
             }
 
-            /* ── Cache hit bar ──────────────────────────────────────────── */
+            /* Cache hit bar */
             QProgressBar#HitBar {
                 background-color: #ddeaf8;
                 border: none;
@@ -583,7 +565,7 @@ class ControlPanel(QMainWindow):
                 border-radius: 2px;
             }
 
-            /* ── Buttons ────────────────────────────────────────────────── */
+            /* Buttons */
             QPushButton {
                 background-color: #1e4db7;
                 color: #ffffff;
@@ -631,7 +613,7 @@ class ControlPanel(QMainWindow):
                 background-color: #ef4444;
             }
 
-            /* ── Inputs ─────────────────────────────────────────────────── */
+            /* Inputs */
             QLineEdit, QTextEdit, QPlainTextEdit {
                 background-color: #ffffff;
                 color: #1a2e4a;
@@ -646,7 +628,7 @@ class ControlPanel(QMainWindow):
                 border-color: #3a6ad8;
             }
 
-            /* ── ComboBox ───────────────────────────────────────────────── */
+            /* ComboBox */
             QComboBox {
                 background-color: #ffffff;
                 color: #1a2e4a;
@@ -693,7 +675,7 @@ class ControlPanel(QMainWindow):
                 background-color: #ddeaf8;
             }
 
-            /* ── List widgets ───────────────────────────────────────────── */
+            /* List widgets */
             QListWidget {
                 background-color: #ffffff;
                 color: #1a2e4a;
@@ -717,7 +699,7 @@ class ControlPanel(QMainWindow):
                 background-color: #f4f8fd;
             }
 
-            /* ── Table ──────────────────────────────────────────────────── */
+            /* Table */
             QTableWidget {
                 background-color: #ffffff;
                 alternate-background-color: #f4f8fd;
@@ -758,7 +740,7 @@ class ControlPanel(QMainWindow):
                 color: #1a2e4a;
             }
 
-            /* ── Scrollbars ─────────────────────────────────────────────── */
+            /* Scrollbars */
             QScrollBar:vertical {
                 background-color: #f0f5fc;
                 width: 8px;
@@ -800,7 +782,7 @@ class ControlPanel(QMainWindow):
                 width: 0; background: none;
             }
 
-            /* ── Message boxes ──────────────────────────────────────────── */
+            /* Message boxes */
             QMessageBox {
                 background-color: #ffffff;
             }
@@ -819,7 +801,7 @@ class ControlPanel(QMainWindow):
                 padding: 7px 22px;
             }
 
-            /* ── Status bar ─────────────────────────────────────────────── */
+            /* Status bar */
             QStatusBar {
                 background-color: #162d5c;
                 color: #6a8ab8;
@@ -835,14 +817,14 @@ class ControlPanel(QMainWindow):
                 font-family: 'Consolas', monospace;
             }
 
-            /* ── Generic labels ─────────────────────────────────────────── */
+            /* Generic labels */
             QLabel {
                 background-color: transparent;
                 color: #1a2e4a;
             }
         """)
 
-    # ── UI layout ─────────────────────────────────────────────────────────────
+    # Build the main UI layout.
     def build_ui(self):
         root = QWidget()
         main_layout = QHBoxLayout()
@@ -850,7 +832,7 @@ class ControlPanel(QMainWindow):
         main_layout.setSpacing(0)
         root.setLayout(main_layout)
 
-        # ── Sidebar ──────────────────────────────────────────────────────────
+        # Sidebar.
         sidebar_wrapper = QVBoxLayout()
         sidebar_wrapper.setContentsMargins(0, 0, 0, 0)
         sidebar_wrapper.setSpacing(0)
@@ -873,7 +855,7 @@ class ControlPanel(QMainWindow):
         div1.setObjectName("SidebarDivider")
         div1.setFixedHeight(1)
 
-        # Nav
+        # Navigation list.
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("Sidebar")
         # Row order here matches the page insertion order in self.pages.
@@ -924,7 +906,7 @@ class ControlPanel(QMainWindow):
         sidebar_box.setLayout(sidebar_wrapper)
         sidebar_box.setFixedWidth(210)
 
-        # ── Pages ────────────────────────────────────────────────────────────
+        # Pages stack.
         self.pages = QStackedWidget()
         # Keep this order aligned with sidebar indices to simplify page switching.
         self.pages.addWidget(self.build_dashboard_page())
@@ -938,7 +920,7 @@ class ControlPanel(QMainWindow):
 
         self.setCentralWidget(root)
 
-        # ── Status bar ───────────────────────────────────────────────────────
+        # Status bar.
         sb = QStatusBar()
         self.setStatusBar(sb)
         self._sb_state = QLabel("●  PROXY STOPPED")
@@ -948,7 +930,7 @@ class ControlPanel(QMainWindow):
         sb.addWidget(self._sb_port)
         sb.addPermanentWidget(self._sb_ver)
 
-    # ── Section title helper ──────────────────────────────────────────────────
+    # Helper for page section titles.
     def section_title(self, title, subtitle):
         box = QVBoxLayout()
         box.setSpacing(3)
@@ -961,7 +943,7 @@ class ControlPanel(QMainWindow):
         box.addWidget(sl)
         return box
 
-    # ── Pages ─────────────────────────────────────────────────────────────────
+    # Page builders.
     def build_dashboard_page(self):
         page = QWidget()
         layout = QVBoxLayout()
@@ -1232,17 +1214,17 @@ class ControlPanel(QMainWindow):
         page.setLayout(layout)
         return page
 
-    # ── Navigation ────────────────────────────────────────────────────────────
+    # Navigation handlers.
     def change_page(self, index):
         # Sidebar index maps directly to the stacked-widget page index.
         self.pages.setCurrentIndex(index)
 
-    # ── Proxy control ─────────────────────────────────────────────────────────
+    # Proxy control actions.
     def start_proxy(self):
         if proxy.is_running():
             QMessageBox.information(self, "Proxy", "Proxy is already running.")
             return
-        # Run the proxy server in a daemon thread so the GUI stays responsive.
+        # Start proxy server on a daemon thread so the UI stays responsive.
         self.proxy_thread = threading.Thread(target=proxy.start_server)
         self.proxy_thread.daemon = True
         self.proxy_thread.start()
@@ -1274,18 +1256,18 @@ class ControlPanel(QMainWindow):
             QMessageBox.warning(self, "Proxy Not Running", "Start the proxy before sending a request.")
             return
 
-        # Use a worker thread to avoid freezing the UI while waiting for network I/O.
+        # Send requests on a worker thread so the UI does not freeze.
         self.response_output.setPlainText("Sending request through proxy...")
         self.request_worker = RequestWorker(method, url, body)
         self.request_worker.finished.connect(self.response_output.setPlainText)
         self.request_worker.start()
 
-    # ── Rules ─────────────────────────────────────────────────────────────────
+    # Rules management.
     def load_rules(self):
         self.blocked_list.clear()
         self.allowed_list.clear()
 
-        # Create a default rules file on first run to keep the UI usable out of the box.
+        # Create a default rules file on first run so the screen works immediately.
         if not os.path.exists(RULES_FILE):
             with open(RULES_FILE, "w", encoding="utf-8") as f:
                 json.dump({"mode": "blacklist", "blocked": [], "allowed": []}, f, indent=2)
@@ -1302,7 +1284,7 @@ class ControlPanel(QMainWindow):
             QMessageBox.critical(self, "Rules Error", f"Could not load rules.json:\n{e}")
 
     def save_rules(self):
-        # Read current widget state and persist it exactly as JSON config.
+        # Read current widget values and save them to rules.json.
         rules = {
             "mode": self.rules_mode_combo.currentText(),
             "blocked": self.list_items(self.blocked_list),
@@ -1329,14 +1311,14 @@ class ControlPanel(QMainWindow):
         domain = domain.strip()
         if not domain:
             return
-        # Prevent duplicate entries so rules stay predictable and easy to scan.
+        # Avoid duplicates so the rules list stays clean.
         if domain in self.list_items(list_widget):
             QMessageBox.information(self, "Duplicate Rule", "This domain already exists in the list.")
             return
         list_widget.addItem(domain)
 
     def list_items(self, list_widget):
-        # Return normalized non-empty values only (trimmed strings).
+        # Return only non-empty, trimmed values.
         return [
             list_widget.item(i).text().strip()
             for i in range(list_widget.count())
@@ -1354,11 +1336,11 @@ class ControlPanel(QMainWindow):
         input_box.clear()
 
     def remove_selected(self, list_widget):
-        # Remove all selected rows in one pass (supports multi-select).
+        # Remove every selected row (supports multi-select).
         for item in list_widget.selectedItems():
             list_widget.takeItem(list_widget.row(item))
 
-    # ── Logs ──────────────────────────────────────────────────────────────────
+    # Log viewer actions.
     def load_logs(self):
         try:
             if not os.path.exists(LOG_FILE):
@@ -1366,7 +1348,7 @@ class ControlPanel(QMainWindow):
                 return
             with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
-            # Show the tail only; full logs can grow quickly during testing.
+            # Show only the tail because logs can get large quickly.
             self.logs_output.setPlainText("".join(lines[-300:]))
             self.logs_output.verticalScrollBar().setValue(
                 self.logs_output.verticalScrollBar().maximum()
@@ -1384,12 +1366,12 @@ class ControlPanel(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Log Error", f"Could not clear logs:\n{e}")
 
-    # ── Cache ─────────────────────────────────────────────────────────────────
+    # Cache actions.
     def load_cache(self):
         try:
             entries = cache.list_entries()
             self.cache_table.setRowCount(len(entries))
-            # Keep the table in sync with the latest snapshot returned by cache.py.
+            # Keep the table aligned with the latest snapshot from cache.py.
             for row, entry in enumerate(entries):
                 self.cache_table.setItem(row, 0, QTableWidgetItem(str(entry.get("url", ""))))
                 self.cache_table.setItem(row, 1, QTableWidgetItem(str(entry.get("size_bytes", 0))))
@@ -1406,9 +1388,9 @@ class ControlPanel(QMainWindow):
         self.load_cache()
         QMessageBox.information(self, "Cache Purged", f"Removed {removed} cache entries.")
 
-    # ── Periodic refresh ──────────────────────────────────────────────────────
+    # Periodic refresh.
     def refresh_dashboard(self):
-        # Proxy runtime state drives both cards and status-bar indicators.
+        # Proxy runtime state updates both cards and status-bar labels.
         running = proxy.is_running()
         self.status_card.set_running(running)
         self.connections_card.set_value(proxy.active_connections)
@@ -1427,7 +1409,7 @@ class ControlPanel(QMainWindow):
             )
 
         try:
-            # Rules mode is read from disk so UI reflects external edits too.
+            # Read mode from disk so external edits appear in the UI.
             with open(RULES_FILE, "r", encoding="utf-8") as f:
                 rules = json.load(f)
             self.mode_card.set_value(rules.get("mode", "blacklist"))
@@ -1435,7 +1417,7 @@ class ControlPanel(QMainWindow):
             self.mode_card.set_value("—")
 
         try:
-            # Cache stats are best-effort; on failure we fall back to safe defaults.
+            # Cache stats are best-effort; if it fails, use safe defaults.
             stats = cache.stats()
             self.cache_hit_card.set_rate(stats.get("hit_rate", 0))
             self.cache_entries_card.set_value(stats.get("entries", 0))
@@ -1444,7 +1426,7 @@ class ControlPanel(QMainWindow):
             self.cache_entries_card.set_value("—")
 
     def refresh_all(self):
-        # Dashboard is always refreshed; heavier pages refresh only when visible.
+        # Always refresh dashboard; refresh heavier pages only when visible.
         self.refresh_dashboard()
         if self.pages.currentIndex() == 3:
             self.load_logs()
