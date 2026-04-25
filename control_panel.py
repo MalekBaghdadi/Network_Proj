@@ -1,4 +1,4 @@
-# Author: Nakhoul Nehra
+# Control panel for the proxy
 # Description: PyQt control panel for the SecureWatch Proxy.
 #              Provides a simple admin interface for starting/stopping the proxy,
 #              viewing logs, editing rules, testing requests, and checking cache stats.

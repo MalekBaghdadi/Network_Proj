@@ -1,10 +1,5 @@
-# Author: Malek Baghdadi
-# Description: Per-connection logic. Parses incoming HTTP requests, strips
-#              proxy-specific headers, and forwards traffic between the client
-#              and the target server. Handles both HTTP (GET/POST forwarding)
-#              and HTTPS (raw TCP tunnel via CONNECT method).
-# Author: Nakhoul Nehra | Logging integrated via logger.py
-# Author: Charbel Farhat | Content caching integrated via cache.py
+# Main request handler logic
+# Handles HTTP and HTTPS tunnels
 
 import socket
 import threading
@@ -15,13 +10,11 @@ from cache import get as cache_get, store as cache_store, MAX_ENTRY_BYTES
 
 
 def parse_request(raw_request):
-    # Author: Malek Baghdadi
     """
-    Parse a raw HTTP request into its components.
-    Returns: (method, url, host, port, headers_dict)
+    Parses raw bytes from client into method, url, host, etc.
     """
     try:
-        # Split header section from body
+        # separate headers from body
         header_section = raw_request.split(b'\r\n\r\n')[0]
         lines = header_section.decode('utf-8', errors='replace').split('\r\n')
 
@@ -70,11 +63,9 @@ def parse_request(raw_request):
 
 
 def modify_headers(raw_request):
-    # Author: Malek Baghdadi
     """
-    Remove proxy-specific headers from the request before forwarding.
-    Rewrites the request line to use a path-only URL (strips scheme and host).
-    Returns the cleaned request as bytes.
+    Cleans up the headers (removes proxy-specific ones) before forwarding.
+    Also fixes the URL from absolute to path-only.
     """
     # Headers that must NOT be forwarded to the target server
     hop_by_hop = [
@@ -125,41 +116,26 @@ def modify_headers(raw_request):
         return raw_request
 
 
-# Author: Nakhoul Nehra
 def _parse_status_code(response_bytes: bytes) -> int | None:
-    """
-    Called inside forward_http() to extract the HTTP status code
-    from the first response chunk.
-    e.g. b'HTTP/1.1 200 OK\\r\\n...' → 200
-    Returns None if parsing fails (e.g. for binary/partial data).
-    """
+    """Gets the status code from the first line of the response."""
     try:
         first_line = response_bytes.split(b'\r\n', 1)[0].decode('utf-8', errors='replace')
-        # "HTTP/1.1 200 OK"  →  ["HTTP/1.1", "200", "OK"]
+        # e.g. "HTTP/1.1 200 OK"
         return int(first_line.split(' ')[1])
     except Exception:
         return None
 
 
 def forward_http(client_socket, host, port, request, client_ip, client_port, method, url):
-    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra | Caching integrated by: Charbel Farhat
     """
-    Forward an HTTP request to the target server and relay the response
-    back to the client. While streaming, a copy of the response is
-    accumulated in memory so that cacheable responses (GET + 2xx) can be
-    stored for future hits. If the response exceeds MAX_ENTRY_BYTES the
-    accumulation is discarded — the client still gets the full stream,
-    we just don't try to cache oversized content.
+    Main loop for HTTP: connects to server, sends request, relays back to client.
+    Also handles caching if it's a GET.
     """
     server_socket = None          # ensure it is defined for the finally block
     status_code   = None
     first_chunk   = True
 
-    # Cache accumulation 
-    # Only accumulate for methods that could ever enter the cache.
-    # skip_cache flips to True if the response outgrows MAX_ENTRY_BYTES,
-    # at which point we drop the buffer to free memory and stop appending.
-    # Author: Charbel Farhat
+    # Cache stuff
     accumulate      = (method == 'GET')
     response_buffer = bytearray() if accumulate else None
     skip_cache      = False
@@ -186,7 +162,7 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
 
             client_socket.sendall(data)
 
-            # Cache accumulation (Author: Charbel Farhat)
+            # Cache accumulation
             if accumulate and not skip_cache:
                 response_buffer.extend(data)
                 if len(response_buffer) > MAX_ENTRY_BYTES:
@@ -197,7 +173,7 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
         # Log the completed response
         log_response(client_ip, client_port, method, url, host, port, status_code)
 
-        # Store in cache if we have a complete GET + 2xx response (Author: Charbel Farhat)
+        # Store in cache if we have a complete GET + 2xx response
         # cache_store() silently enforces its own policy (status code, headers,
         # size, Cache-Control), so we can call it unconditionally here.
         if accumulate and not skip_cache and response_buffer is not None:
@@ -218,10 +194,8 @@ def forward_http(client_socket, host, port, request, client_ip, client_port, met
 
 
 def tunnel_https(client_socket, host, port, client_ip, client_port, url):
-    # Author: Charbel Farhat - Malek | MITM integration
     """
-    Perform a Man-In-The-Middle attack on HTTPS traffic.
-    Creates a fake cert for the domain, wraps sockets in SSL, and logs plaintext.
+    MITM for HTTPS. Creates fake certs and reads the plaintext before re-encrypting.
     """
     server_socket = None
     secure_client_socket = None
@@ -291,11 +265,7 @@ def tunnel_https(client_socket, host, port, client_ip, client_port, url):
 
 
 def handle_client(client_socket, client_address):
-    # Author: Malek Baghdadi | Logging integrated by: Nakhoul Nehra
-    """
-    Entry point for each client thread.
-    Reads the request, decides if it's HTTP or HTTPS, and routes accordingly.
-    """
+    """Decision point: is it HTTP or HTTPS? Blocked or Cached?"""
     client_ip, client_port = client_address   # unpack once for reuse
 
     try:
@@ -319,7 +289,7 @@ def handle_client(client_socket, client_address):
             client_socket.sendall(blocked_response())
             return
 
-        # Cache lookup (Author: Charbel Farhat)
+        # Cache lookup
         # Check the cache BEFORE opening a socket to the target server.
         # On a fresh hit, serve the stored bytes directly and skip forwarding.
         # cache_get() is method-aware — non-GET requests return None immediately.

@@ -1,10 +1,4 @@
-# Author: Nakhoul Nehra
-# Description: Blacklist / whitelist filtering for the proxy server.
-#              Loads domain and IP rules from rules.json and checks each
-#              request before it is forwarded to the target server.
-#              Blocked requests are rejected with a custom 403 Forbidden
-#              HTML response. The rules file is reloaded automatically
-#              whenever it changes on disk — no proxy restart needed.
+# Handles domain/IP filtering
 
 import json
 import os
@@ -67,21 +61,7 @@ def _matches(host: str, entry: str) -> bool:
 
 
 def is_blocked(host: str, client_ip: str, client_port: int, url: str) -> bool:
-    """
-    Return True if the request should be blocked, False if it should pass.
-
-    Behaviour depends on the active mode in rules.json:
-      - "blacklist" (default): block any host that appears in 'blocked'.
-      - "whitelist"           : block any host that does NOT appear in 'allowed'.
-
-    Also calls log_blocked() so the logger records the event.
-
-    Args:
-        host        : Target hostname or IP (e.g. 'ads.example.com').
-        client_ip   : Client IP address (for logging).
-        client_port : Client source port (for logging).
-        url         : Full URL of the request (for logging).
-    """
+    """Checks rules.json to see if a host is blocked."""
     # Check for an updated rules file before every decision
     _reload_if_changed()
 

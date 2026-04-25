@@ -1,11 +1,4 @@
-# Author: Charbel Farhat
-# Description: In-memory content caching layer for the SecureWatch Proxy.
-#              Stores full HTTP responses keyed by the request URL, honours
-#              Cache-Control and Expires headers to decide TTL, and caps
-#              total memory use by evicting the least-recently-used entries
-#              once the total cached bytes exceed the configured limit.
-#              All access is thread-safe via a single module-level lock so
-#              that concurrent proxy workers cannot corrupt shared state.
+# In-memory cache with LRU eviction and TTL support
 
 import re
 import threading
@@ -24,12 +17,7 @@ CACHEABLE_METHODS = {"GET"}
 
 # Entry record
 class _CacheEntry:
-  #Author: Charbel Farhat
-    """
-    Single cached response record. Kept minimal with __slots__ to reduce
-    memory overhead when the cache fills up with many small entries.
-    """
-    __slots__ = ("response_bytes", "stored_at", "expires_at", "size")
+    """A single object in the cache."""
 
     def __init__(self, response_bytes: bytes, ttl: int):
         now                 = time.time()
@@ -66,27 +54,14 @@ _stats = {
 
 # Helpers
 def _cache_key(host: str, url: str) -> str:
-  #Author: Charbel Farhat
-    """
-    Build a canonical cache key from the target host and request URL.
-    The proxy may see either an absolute URL (http://example.com/page)
-    when the client sends a standard proxy request, or a path-only URL
-    (/page) on some tools — this helper normalises both forms so we
-    never store the same resource under two different keys.
-    """
+    """Standardizes the URL to use as a key."""
     if url.startswith(("http://", "https://")):
         return url
     return f"http://{host}{url}"
 
 
 def _parse_response_head(response_bytes: bytes):
-  #Author: Charbel Farhat
-    """
-    Pull the status code and response headers out of a raw HTTP response.
-    Decoded as ISO-8859-1 (the HTTP/1.1 header charset) so binary bodies
-    cannot raise a UnicodeDecodeError while we only care about the head.
-    Returns (status_code, headers_dict) or (None, {}) on parse failure.
-    """
+    """Splits the status and headers from raw bytes."""
     try:
         head, _, _body = response_bytes.partition(b"\r\n\r\n")
         lines = head.decode("iso-8859-1", errors="replace").split("\r\n")
@@ -110,26 +85,7 @@ def _parse_response_head(response_bytes: bytes):
 
 
 def _extract_ttl(headers: dict):
-  # Author: Charbel Farhat
-    """
-    Decide a TTL (in seconds) for a response based on its headers.
-
-    Return values:
-        int > 0  → explicit TTL from headers (use it)
-        0        → explicitly stale (do NOT cache)
-        None     → explicitly forbidden (no-store / no-cache / private)
-        -1       → no directive at all — caller should fall back to DEFAULT_TTL
-
-    Directive precedence:
-      1. Cache-Control: no-store   → None
-      2. Cache-Control: private    → None  (shared cache must not store it)
-      3. Cache-Control: s-maxage=N → N     (proxy-specific, beats max-age)
-      4. Cache-Control: max-age=N  → N
-      5. Cache-Control: no-cache   → None  (we treat "must revalidate" as "don't store"
-                                             because this proxy has no revalidation logic)
-      6. Expires: <http-date>      → (expires - now) clamped at 0
-      7. Nothing at all            → -1
-    """
+    # cc: Cache-Control
     cc = headers.get("cache-control", "").lower()
 
     if cc:
@@ -166,11 +122,7 @@ def _extract_ttl(headers: dict):
 
 
 def _evict_until_fits(incoming_size: int) -> None:
-  # Author: Charbel Farhat
-    """
-    Drop oldest (least-recently-used) entries until the new one fits under
-    MAX_CACHE_BYTES. Caller MUST already hold _store_lock.
-    """
+    """Pops oldest items from OrderedDict until there is room."""
     while _store and (_stats["bytes"] + incoming_size) > MAX_CACHE_BYTES:
         url, entry = _store.popitem(last=False)   # last=False → pop oldest
         _stats["bytes"]     -= entry.size
@@ -179,16 +131,8 @@ def _evict_until_fits(incoming_size: int) -> None:
 
 
 # Public API
-# Author: Charbel Farhat
 def get(host: str, url: str, method: str):
-    """
-    Look up a cached response.
-      Returns: the raw response bytes on a fresh hit, or None on miss /
-               expiry / non-cacheable method.
-
-    Logs the hit or miss through logger.py so the event shows up in
-    proxy.log alongside the regular request/response records.
-    """
+    """Public API to fetch from cache."""
     if method not in CACHEABLE_METHODS:
         return None
 
@@ -217,21 +161,7 @@ def get(host: str, url: str, method: str):
 
 
 def store(host: str, url: str, method: str, status_code, response_bytes: bytes) -> bool:
-  # Author: Charbel Farhat
-    """
-    Save a response in the cache if policy permits. Returns True if stored,
-    False otherwise. Never raises — a caching failure must not break the
-    proxy's core forwarding path.
-
-    Filters applied, in order:
-      - Method must be in CACHEABLE_METHODS     (project choice: GET only)
-      - Status code must be 2xx                 (don't cache 4xx / 5xx errors)
-      - Response size must be ≤ MAX_ENTRY_BYTES (skip huge downloads)
-
-    Origin Cache-Control directives (no-store / no-cache / private / max-age=0)
-    are intentionally overridden with DEFAULT_TTL so that repeated requests
-    always benefit from the cache regardless of what the origin says.
-    """
+    """Public API to put into cache."""
     if method not in CACHEABLE_METHODS:
         return False
     if status_code is None or not (200 <= status_code < 300):
@@ -271,8 +201,7 @@ def store(host: str, url: str, method: str, status_code, response_bytes: bytes) 
     return True
 
 
-# Admin-dashboard helpers
-# Author: Charbel Farhat
+# Admin helpers
 def list_entries() -> list:
     """
     Snapshot of every cached entry, for the /cache page on the admin UI.

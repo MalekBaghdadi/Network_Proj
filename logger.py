@@ -1,7 +1,4 @@
-# Author: Nakhoul Nehra
-# Description: Logging middleware for the proxy server.
-#              Uses Python's built-in logging module to write structured
-#              per-request records to proxy.log and to the console.
+# Logging middleware for the proxy
 
 import logging
 import os
@@ -39,17 +36,7 @@ if not logger.handlers:
 def log_request(client_ip: str, client_port: int,
                 method: str, url: str,
                 target_host: str, target_port: int) -> None:
-    """
-    Log an incoming client request before it is forwarded.
-
-    Args:
-        client_ip    : IP address of the connecting client.
-        client_port  : Source port of the connecting client.
-        method       : HTTP method (GET, POST, CONNECT, …).
-        url          : Full URL or CONNECT authority (host:port).
-        target_host  : Resolved target hostname.
-        target_port  : Resolved target port number.
-    """
+    """Logs an incoming request."""
     logger.info(
         f"REQUEST  | client={client_ip}:{client_port} | "
         f"{method} {url} | target={target_host}:{target_port}"
@@ -60,19 +47,7 @@ def log_response(client_ip: str, client_port: int,
                  method: str, url: str,
                  target_host: str, target_port: int,
                  status_code: int | None) -> None:
-    """
-    Log the outcome of a forwarded request once the response is received.
-
-    Args:
-        client_ip   : IP address of the connecting client.
-        client_port : Source port of the connecting client.
-        method      : HTTP method used.
-        url         : Full URL that was requested.
-        target_host : Hostname of the target server.
-        target_port : Port of the target server.
-        status_code : HTTP status code returned by the target server,
-                      or None for raw HTTPS tunnels (CONNECT).
-    """
+    """Logs the final response status."""
     code_str = str(status_code) if status_code is not None else "TUNNEL"
     logger.info(
         f"RESPONSE | client={client_ip}:{client_port} | "
@@ -82,16 +57,7 @@ def log_response(client_ip: str, client_port: int,
 
 def log_error(client_ip: str, client_port: int,
               context: str, error: Exception | str) -> None:
-    """
-    Log an error that occurred while processing a request.
-
-    Args:
-        client_ip   : IP address of the connecting client.
-        client_port : Source port of the connecting client.
-        context     : Short label describing where the error occurred
-                      (e.g. "forward_http", "parse_request").
-        error       : The exception object or error string.
-    """
+    """Logs errors to proxy.log."""
     logger.error(
         f"ERROR    | client={client_ip}:{client_port} | "
         f"context={context} | {error}"

@@ -1,4 +1,4 @@
-# Author: Charbel Farhat - Malek
+# MITM support - generates root CA and domain-specific certs
 import os
 import ssl
 from datetime import datetime, timedelta, timezone
@@ -19,7 +19,7 @@ def generate_ca():
     if os.path.exists(CA_KEY_PATH) and os.path.exists(CA_CERT_PATH):
         return
 
-    # Generate CA private key
+    # Create the root key
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -31,7 +31,7 @@ def generate_ca():
             encryption_algorithm=serialization.NoEncryption()
         ))
 
-    # Generate CA certificate
+    # Create the root cert
     subject = issuer = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, u"LB"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"SecureWatch Proxy"),
@@ -70,7 +70,7 @@ def generate_domain_cert(domain):
     with open(CA_CERT_PATH, "rb") as f:
         ca_cert = x509.load_pem_x509_certificate(f.read())
 
-    # Generate domain key
+    # Create key for this domain
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048,
@@ -82,7 +82,7 @@ def generate_domain_cert(domain):
             encryption_algorithm=serialization.NoEncryption()
         ))
 
-    # Generate domain certificate
+    # Create cert for this domain
     subject = x509.Name([
         x509.NameAttribute(NameOID.COUNTRY_NAME, u"LB"),
         x509.NameAttribute(NameOID.ORGANIZATION_NAME, u"SecureWatch Proxy MITM"),

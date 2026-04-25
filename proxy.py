@@ -1,6 +1,5 @@
-# Author: Malek Baghdadi
-# Role: Main entry point. Sets up the TCP socket server and dispatches one thread per client connection.
-# Author: Nakhoul Nehra | Admin control support added for PyQt control panel.
+# Team: Malek Baghdadi, Nakhoul Nehra
+# Proxy main entry - sets up server and threads
 
 import socket
 import threading
@@ -24,14 +23,14 @@ def tracked_handle(client_socket, client_address):
 
     with connections_lock:
         active_connections += 1
-        print(f"[*] Active connections: {active_connections}")
+        print(f"[*] Total connections: {active_connections}")
 
     try:
         handle_client(client_socket, client_address)
     finally:
         with connections_lock:
             active_connections -= 1
-            print(f"[*] Connection closed. Active connections: {active_connections}")
+            print(f"[*] Closed: {active_connections} remaining")
 
 
 def start_server():
@@ -72,7 +71,7 @@ def start_server():
             thread.start()
 
     except Exception as e:
-        print(f"[!] Proxy server error: {e}")
+        print(f"[!] Server error: {e}")
 
     finally:
         with server_lock:
