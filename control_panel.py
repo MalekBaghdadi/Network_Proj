@@ -794,6 +794,7 @@ class ControlPanel(QMainWindow):
         # Nav
         self.sidebar = QListWidget()
         self.sidebar.setObjectName("Sidebar")
+        # Row order here matches the page insertion order in self.pages.
         self.sidebar.addItems([
             "  ◈  Dashboard",
             "  ⊡  Request Lab",
@@ -843,6 +844,7 @@ class ControlPanel(QMainWindow):
 
         # ── Pages ────────────────────────────────────────────────────────────
         self.pages = QStackedWidget()
+        # Keep this order aligned with sidebar indices to simplify page switching.
         self.pages.addWidget(self.build_dashboard_page())
         self.pages.addWidget(self.build_request_page())
         self.pages.addWidget(self.build_rules_page())
@@ -954,6 +956,7 @@ class ControlPanel(QMainWindow):
         self.method_combo.addItems(["GET", "POST"])
 
         self.preset_combo = QComboBox()
+        # Store full site metadata as item data so we can fill URL/domain quickly.
         for site in PRESET_SITES:
             self.preset_combo.addItem(site["name"], site)
         self.preset_combo.currentIndexChanged.connect(self.fill_selected_url)
@@ -1040,6 +1043,7 @@ class ControlPanel(QMainWindow):
         lists.setSpacing(16)
 
         def make_list_box(label_text, list_attr_name, input_attr_name, placeholder):
+            # Shared builder for blocked/allowed columns to keep both sides identical.
             box = QVBoxLayout()
             box.setSpacing(6)
             box.addWidget(QLabel(label_text))
@@ -1148,6 +1152,7 @@ class ControlPanel(QMainWindow):
 
     # ── Navigation ────────────────────────────────────────────────────────────
     def change_page(self, index):
+        # Sidebar index maps directly to the stacked-widget page index.
         self.pages.setCurrentIndex(index)
 
     # ── Proxy control ─────────────────────────────────────────────────────────
@@ -1155,6 +1160,7 @@ class ControlPanel(QMainWindow):
         if proxy.is_running():
             QMessageBox.information(self, "Proxy", "Proxy is already running.")
             return
+        # Run the proxy server in a daemon thread so the GUI stays responsive.
         self.proxy_thread = threading.Thread(target=proxy.start_server)
         self.proxy_thread.daemon = True
         self.proxy_thread.start()
@@ -1186,6 +1192,7 @@ class ControlPanel(QMainWindow):
             QMessageBox.warning(self, "Proxy Not Running", "Start the proxy before sending a request.")
             return
 
+        # Use a worker thread to avoid freezing the UI while waiting for network I/O.
         self.response_output.setPlainText("Sending request through proxy...")
         self.request_worker = RequestWorker(method, url, body)
         self.request_worker.finished.connect(self.response_output.setPlainText)
@@ -1196,6 +1203,7 @@ class ControlPanel(QMainWindow):
         self.blocked_list.clear()
         self.allowed_list.clear()
 
+        # Create a default rules file on first run to keep the UI usable out of the box.
         if not os.path.exists(RULES_FILE):
             with open(RULES_FILE, "w", encoding="utf-8") as f:
                 json.dump({"mode": "blacklist", "blocked": [], "allowed": []}, f, indent=2)
@@ -1212,6 +1220,7 @@ class ControlPanel(QMainWindow):
             QMessageBox.critical(self, "Rules Error", f"Could not load rules.json:\n{e}")
 
     def save_rules(self):
+        # Read current widget state and persist it exactly as JSON config.
         rules = {
             "mode": self.rules_mode_combo.currentText(),
             "blocked": self.list_items(self.blocked_list),
@@ -1238,12 +1247,14 @@ class ControlPanel(QMainWindow):
         domain = domain.strip()
         if not domain:
             return
+        # Prevent duplicate entries so rules stay predictable and easy to scan.
         if domain in self.list_items(list_widget):
             QMessageBox.information(self, "Duplicate Rule", "This domain already exists in the list.")
             return
         list_widget.addItem(domain)
 
     def list_items(self, list_widget):
+        # Return normalized non-empty values only (trimmed strings).
         return [
             list_widget.item(i).text().strip()
             for i in range(list_widget.count())
@@ -1261,6 +1272,7 @@ class ControlPanel(QMainWindow):
         input_box.clear()
 
     def remove_selected(self, list_widget):
+        # Remove all selected rows in one pass (supports multi-select).
         for item in list_widget.selectedItems():
             list_widget.takeItem(list_widget.row(item))
 
@@ -1272,6 +1284,7 @@ class ControlPanel(QMainWindow):
                 return
             with open(LOG_FILE, "r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
+            # Show the tail only; full logs can grow quickly during testing.
             self.logs_output.setPlainText("".join(lines[-300:]))
             self.logs_output.verticalScrollBar().setValue(
                 self.logs_output.verticalScrollBar().maximum()
@@ -1294,6 +1307,7 @@ class ControlPanel(QMainWindow):
         try:
             entries = cache.list_entries()
             self.cache_table.setRowCount(len(entries))
+            # Keep the table in sync with the latest snapshot returned by cache.py.
             for row, entry in enumerate(entries):
                 self.cache_table.setItem(row, 0, QTableWidgetItem(str(entry.get("url", ""))))
                 self.cache_table.setItem(row, 1, QTableWidgetItem(str(entry.get("size_bytes", 0))))
@@ -1312,6 +1326,7 @@ class ControlPanel(QMainWindow):
 
     # ── Periodic refresh ──────────────────────────────────────────────────────
     def refresh_dashboard(self):
+        # Proxy runtime state drives both cards and status-bar indicators.
         running = proxy.is_running()
         self.status_card.set_running(running)
         self.connections_card.set_value(proxy.active_connections)
@@ -1330,6 +1345,7 @@ class ControlPanel(QMainWindow):
             )
 
         try:
+            # Rules mode is read from disk so UI reflects external edits too.
             with open(RULES_FILE, "r", encoding="utf-8") as f:
                 rules = json.load(f)
             self.mode_card.set_value(rules.get("mode", "blacklist"))
@@ -1337,6 +1353,7 @@ class ControlPanel(QMainWindow):
             self.mode_card.set_value("—")
 
         try:
+            # Cache stats are best-effort; on failure we fall back to safe defaults.
             stats = cache.stats()
             self.cache_hit_card.set_rate(stats.get("hit_rate", 0))
             self.cache_entries_card.set_value(stats.get("entries", 0))
@@ -1345,6 +1362,7 @@ class ControlPanel(QMainWindow):
             self.cache_entries_card.set_value("—")
 
     def refresh_all(self):
+        # Dashboard is always refreshed; heavier pages refresh only when visible.
         self.refresh_dashboard()
         if self.pages.currentIndex() == 3:
             self.load_logs()

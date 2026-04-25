@@ -1,4 +1,4 @@
-# Author: Member 3
+# Author: Charbel Farhat - Malek
 import os
 import ssl
 from datetime import datetime, timedelta, timezone
